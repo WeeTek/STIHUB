@@ -1,12 +1,28 @@
+import asyncio
+
 import discord
 from discord.ext import commands
 from discord.utils import get
 import os
-import re
+import mysql.connector
 import time
+import youtube_dl
+import asyncio
+
+musics = {}
+ytdl = youtube_dl.YoutubeDL()
+
+
+
+
 
 intents = discord.Intents().all()
 bot = commands.Bot(command_prefix='!', intents=intents)
+
+conn = mysql.connector.connect(host="136.243.72.220",
+                               user="u3152_26puVHlJVI", password=".2BzcwuYmg1^YJ7@iwk96dn=", database="s3152_account")
+
+cursor = conn.cursor()
 
 
 @bot.event
@@ -19,6 +35,79 @@ async def on_ready():
     f = open(file_role, 'a')
     f = open(file_name, 'a')
     f.close()
+
+
+@bot.event
+async def on_ready():
+    print("Ready")
+
+
+class Video:
+    def __init__(self, link):
+        video = ytdl.extract_info(link, download=False)
+        video_format = video["formats"][0]
+        self.url = video["webpage_url"]
+        self.stream_url = video_format["url"]
+
+
+@bot.command()
+async def leave(ctx):
+    client = ctx.guild.voice_client
+    await client.disconnect()
+    musics[ctx.guild] = []
+
+
+@bot.command()
+async def resume(ctx):
+    client = ctx.guild.voice_client
+    if client.is_paused():
+        client.resume()
+
+
+@bot.command()
+async def pause(ctx):
+    client = ctx.guild.voice_client
+    if not client.is_paused():
+        client.pause()
+
+
+@bot.command()
+async def skip(ctx):
+    client = ctx.guild.voice_client
+    client.stop()
+
+
+def play_song(client, queue, song):
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(song.stream_url
+                                                                 ,
+                                                                 before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"))
+
+    def next(_):
+        if len(queue) > 0:
+            new_song = queue[0]
+            del queue[0]
+            play_song(client, queue, new_song)
+        else:
+            asyncio.run_coroutine_threadsafe(client.disconnect(), bot.loop)
+
+    client.play(source, after=next)
+
+
+@bot.command()
+async def play(ctx, url):
+    print("play")
+    client = ctx.guild.voice_client
+
+    if client and client.channel:
+        video = Video(url)
+        musics[ctx.guild].append(video)
+    else:
+        channel = ctx.author.voice.channel
+        video = Video(url)
+        musics[ctx.guild] = []
+        client = await channel.connect()
+        await ctx.send(f"Je lance : {video.url}")
+        play_song(client, musics[ctx.guild], video)
 
 
 @bot.command()
@@ -59,24 +148,43 @@ async def rankup(ctx, role: discord.guild.Role, *, desc=None):
     embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar_url)
     embed.add_field(name="Clique", value="⬇️⬇️⬇⬇️️")
     message = await ctx.send(embed=embed)
-    id = role.name
+    name = role.name
     msg_id = message.id
-    file_role = "role.txt"
-    f = open(file_role, 'a')
-    f.write(str(role.name) + "," + str(msg_id) + "\n")
-    f.close()
+    query = "INSERT INTO `Role`(`role_name`, `message_id`) VALUES (%s, %s)"
+    insert_tuple = (name, str(msg_id))
+    cursor.execute(query, insert_tuple)
     await message.add_reaction("✅")
 
 
 @bot.command()
 @commands.has_permissions(administrator=True)
-async def goulag(ctx, member: discord.Member):
-    message = 'Aller hop hop hop au goulag {}'.format(
-        member.mention)
-    await ctx.send(message)
-    await ctx.send("https://risibank.fr/cache/stickers/d534/53401-full.gif")
+async def goulag(ctx, member: discord.Member, reason=None, ti=None):
+    guild = ctx.guild
+    role = discord.utils.get(guild.roles, name="goulag")
+    if reason is None:
+        reason = "non respect des règles"
+    if reason is not None:
+        reason = reason
+    if ti is None:
+        await member.add_roles(role)
+        await member.send("Tu as été envoyé au goulag pour " + reason)
+    if ti is not None:
+        if str(ti).endswith("d"):
+            res = ti[:-1]
+            await member.send("Tu as été envoyé au goulag pendant " + res + " jours pour " + reason)
+            await member.add_roles(role)
+            await asyncio.sleep(int(res) * 86400)
+            await member.remove_roles(role)
+    if ti is not None:
+        if str(ti).endswith("h"):
+            res = ti[:-1]
+            await member.send("Tu as été envoyé au goulag  pendant " + res + " heures pour " + reason)
+            await member.add_roles(role)
+            await asyncio.sleep(int(res) * 3600)
+            await member.remove_roles(role)
 
 
+"""
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def att_goulag(ctx):
@@ -146,65 +254,66 @@ async def set_goulag(ctx):
                         inline=True)
         await ctx.send(embed=embed)
 
+"""
+
 
 @bot.command()
 @commands.has_permissions(administrator=True)
-async def ban(ctx, member: discord.Member = None, reason=None, time=None):
-    if time == None:
+async def ban(ctx, member: discord.Member, reason=None, ti=None):
+    if reason is None:
+        reason = "tu as enfrein les règles"
+    else:
+        reason = reason
+    if ti is None:
+        await member.ban(reason=reason)
+    if ti is not None:
+        tim = ti
+        if str(ti).endswith("d"):
+            res = ti[:-1]
+            await member.send("Tu as été banni pendant " + res + " jours pour " + reason)
+            await member.ban(reason=reason)
+            await asyncio.sleep(int(res) * 86400)
+            await member.unban()
+            await ctx.send("L'utilisateur" + member.name + "à été bannie pendant " + str(res) + "pour " + reason)
+        if str(ti).endswith("h"):
+            res = ti[:-1]
+            await member.send("Tu as été banni pendant " + str(res) + "heures pour " + reason)
+            await member.ban(reason=reason)
+            await asyncio.sleep(int(res) * 3600)
+            await member.unban()
 
-        if member == None or member == ctx.message.author:
-            await ctx.channel.send("Tu peux pas te ban toi même")
-            return
-        if reason is None:
-            reason = "tu es moche!"
-        message = f"Tu à été ban de {ctx.guild.name} car {reason}"
-        await ctx.channel.send(f"{member} à été banni")
-        await member.send(message)
-        await member.ban(reason=reason)
-        # await ctx.guild.ban(member, reason=reason)
-        await ctx.send("https://media.tenor.com/images/7ca9d4fd492df7b05852f033c84727aa/tenor.gif")
-    if time is not None:
-        t = time
-        today = time.time()
-        ratio = 0
-        id = None
-        m = None
-        if "d" in t:
-            ratio = 86400
-            m = "jour"
-        if "h" in t:
-            ratio = 3600
-            m = "heurs"
-        if "y" in t:
-            ratio = 31536000
-            m = "année"
-        if "m" in t:
-            ratio = 2592000
-            m = "mois"
-        if "w" in t:
-            ratio = 604800
-            m = "semaine"
-        if member == None or member == ctx.message.author:
-            await ctx.channel.send("Tu peux pas te ban toi même")
-            return
-        if reason is None:
-            reason = "tu es moche!"
-        message = f"Tu à été ban de {ctx.guild.name} car {reason} pour " + t[:-1] + m
-        await member.send(message)
-        await member.ban(reason=reason)
-        file_name = "ban.txt"
-        f = open(file_name, "w")
-        f.write(today)
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def mute(ctx, member: discord.Member, reason=None, ti=None):
+    guild = ctx.guild
+    role = discord.utils.get(guild.roles, name="mute")
+    if reason is None:
+        reason = "non respect des règles"
+    if reason is not None:
+        reason = reason
+    if ti is None:
+        await member.add_roles(role)
+        await member.send("Tu as été mute pour" + reason)
+    if ti is not None:
+        if str(ti).endswith("d"):
+            res = ti[:-1]
+            await member.send("Tu as été mute pendant " + res + " jours pour " + reason)
+            await member.add_roles(role)
+            await asyncio.sleep(int(res) * 86400)
+            await member.remove_roles(role)
+    if ti is not None:
+        if str(ti).endswith("h"):
+            res = ti[:-1]
+            await member.send("Tu as été mute pendant " + res + " heures pour " + reason)
+            await member.add_roles(role)
+            await asyncio.sleep(int(res) * 3600)
+            await member.remove_roles(role)
 
 
 @bot.event
 async def on_member_join(member):
-    file_name = "welcome.txt"
-    f = open(file_name, 'r')
-    info = f.readlines()
-    print(info[0])
-    f.close()
-    channel = bot.get_channel(int(info[0]))
+    channel = bot.get_channel(804349334887333912)
 
     my_id = '<388734563599515649>'
     message = 'Salut {}, Bienvenue sur notre serveur discord' ' ici pas vraiment de règles juste soit cool et oublie ' \
@@ -216,59 +325,39 @@ async def on_member_join(member):
 @bot.event
 async def on_raw_reaction_add(payload):
     message = str(payload.message_id)
-    file1 = open("role.txt", "r")
 
     membre = await bot.get_guild(payload.guild_id).fetch_member(payload.user_id)
-    flag = 0
-    index = 0
+    w = "SELECT * FROM Role WHERE `message_id` = '" + message + "'"
+    cursor.execute(w)
 
-    for line in file1:
-        index += 1
+    w_list = cursor.fetchall()
 
-        if message in line:
-            flag = 1
-            most_divided_line = line
-            divided = most_divided_line.split(",")
-            role_to_give = get(bot.get_guild(payload.guild_id).roles, name=divided[0])
-            await membre.add_roles(role_to_give)
-
-            break
-
-    if flag == 0:
-        print('String', message, 'Not Found')
-    else:
-        print('String', message, 'Found In Line', index)
-
-    file1.close()
+    for x in w_list:
+        role_name = x[1]
+        role = get(bot.get_guild(payload.guild_id).roles, name=role_name)
+        if membre.id == 807659161222512670:
+            pass
+        else:
+            await membre.add_roles(role)
 
 
 @bot.event
 async def on_raw_reaction_remove(payload):
     message = str(payload.message_id)
-    file1 = open("role.txt", "r")
 
     membre = await bot.get_guild(payload.guild_id).fetch_member(payload.user_id)
-    flag = 0
-    index = 0
+    w = "SELECT * FROM Role WHERE `message_id` = '" + message + "'"
+    cursor.execute(w)
 
-    for line in file1:
-        index += 1
+    w_list = cursor.fetchall()
 
-        if message in line:
-            flag = 1
-            most_divided_line = line
-            divided = most_divided_line.split(",")
-            role_to_give = get(bot.get_guild(payload.guild_id).roles, name=divided[0])
-            await membre.remove_roles(role_to_give)
-
-            break
-
-    if flag == 0:
-        pass
-    else:
-        print('String', message, 'Found In Line', index)
-
-    file1.close()
+    for x in w_list:
+        role_name = x[1]
+        role = get(bot.get_guild(payload.guild_id).roles, name=role_name)
+        if membre.id == 807659161222512670:
+            pass
+        else:
+            await membre.remove_roles(role)
 
 
 if __name__ == '__main__':
