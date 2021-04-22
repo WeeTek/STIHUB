@@ -6,21 +6,21 @@ from discord.utils import get
 import os
 import mysql.connector
 import time
+
+
 import youtube_dl
 import asyncio
 
+
 musics = {}
 ytdl = youtube_dl.YoutubeDL()
-
-
-
 
 
 intents = discord.Intents().all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 conn = mysql.connector.connect(host="136.243.72.220",
-                               user="u3152_26puVHlJVI", password=".2BzcwuYmg1^YJ7@iwk96dn=", database="s3152_account")
+                               user="u3152_26puVHlJVI", password="FcJ2h4j4M.bhXIMEs@^PT82E", database="s3152_account")
 
 cursor = conn.cursor()
 
@@ -110,6 +110,8 @@ async def play(ctx, url):
         play_song(client, musics[ctx.guild], video)
 
 
+
+
 @bot.command()
 async def welcome(ctx):
     channel = ctx.channel.id
@@ -184,7 +186,6 @@ async def goulag(ctx, member: discord.Member, reason=None, ti=None):
             await member.remove_roles(role)
 
 
-"""
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def att_goulag(ctx):
@@ -253,8 +254,6 @@ async def set_goulag(ctx):
         embed.add_field(name="Ceux qui ont fait de la merde finisse ici", value="les connards terminent ici",
                         inline=True)
         await ctx.send(embed=embed)
-
-"""
 
 
 @bot.command()
@@ -362,4 +361,4 @@ async def on_raw_reaction_remove(payload):
 
 if __name__ == '__main__':
     print("lancement du bot")
-    bot.run("ODA3NjU5MTYxMjIyNTEyNjcw.YB7NNQ.ZRjzCoNQxw5A5vTb13-vPs9JMCE")
+    bot.run("")
